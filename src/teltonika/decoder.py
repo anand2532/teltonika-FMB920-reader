@@ -94,6 +94,67 @@ class TeltonikaDecoder:
                 elements_8b.append({io_id: value})
                 offset += 2
 
+            io = IOElement(
+                event_id = event_io_id,
+                elements_1b=elements_1b,
+                elements_2b=elements_2b,
+                elements_4b=elements_4b,
+                elements_8b=elements_8b
+            )
+            return io, offset
+        except Exception as e:
+            raise ParsingError(f"Failed to decide IO Elements: {e}")
+        
+    @classmethod
+    def decode_avl_data(cls, data: bytes) -> AVLPackets:
+        """Decode complete AVLData packet"""
+        try:
+            codec = data[0]
+            number_of_data = data[1]
+
+            records = []
+            offset = 2
+
+            for _ in range(number_of_data):
+                #Timestamp
+                timestamp = struct.unpack("!Q", data[offset:offset + 8])[0]
+                timestamp = datetime.fromtimestamp(timestamp / 1000.0)
+                offset +=8
+
+                #Priority
+                priority = data[offset]
+                offset += 1
+
+                #GPS Element
+                gps, gps_length = cls.decode_gps(data[offset:])
+                offset += gps_length
+
+                #IO Element
+                io, io_length = cls.decode_io(data[offset:])
+                offset += io_length
+
+                #Create AVL data record
+                record = AVLData(
+                    timestamp=timestamp,
+                    priority=priority,
+                    gps=gps,
+                    io=io
+                )
+                records.append(record)
+
+            #Verify record count
+            if data[offset] != number_of_data:
+                raise ParsingError("Record count mismatch")
+            
+            return AVLPackets(
+                codec=codec,
+                data_count=number_of_data,
+                records=records
+            )
+        except Exception as e:
+            raise ParsingError(f"Failed to deocde AVL packet: {e}")
+
+
 
             
             
